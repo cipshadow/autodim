@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds DisplayFilter.app without Xcode (Command Line Tools only).
+# Builds AutoDim.app without Xcode (Command Line Tools only).
 # Usage: ./build.sh [debug|release]   (debug adds --simulate-time and logging)
 # ./build.sh check   runs the schedule unit checks.
 set -euo pipefail
@@ -12,22 +12,22 @@ if [[ "${1:-release}" == "check" ]]; then
 fi
 
 MODE="${1:-release}"
-APP=build/DisplayFilter.app
+APP=build/AutoDim.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 
 FLAGS=(-parse-as-library -target arm64-apple-macosx15.0)
 if [[ "$MODE" == "debug" ]]; then FLAGS+=(-DDEBUG -Onone); else FLAGS+=(-O); fi
-swiftc "${FLAGS[@]}" $SRC/*.swift -o "$APP/Contents/MacOS/DisplayFilter"
+swiftc "${FLAGS[@]}" $SRC/*.swift -o "$APP/Contents/MacOS/AutoDim"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleExecutable</key><string>DisplayFilter</string>
-	<key>CFBundleIdentifier</key><string>com.yasarkocal.DisplayFilter</string>
-	<key>CFBundleName</key><string>DisplayFilter</string>
+	<key>CFBundleExecutable</key><string>AutoDim</string>
+	<key>CFBundleIdentifier</key><string>com.cipshadow.autodim</string>
+	<key>CFBundleName</key><string>AutoDim</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>1.1</string>
 	<key>CFBundleVersion</key><string>2</string>
