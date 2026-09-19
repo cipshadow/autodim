@@ -1,4 +1,12 @@
-# DisplayFilter
+# AutoDim
+
+AutoDim is a macOS menu bar app that dims your screen and removes blue light on a daily schedule, so your display winds down before bedtime. The app itself is still named DisplayFilter.
+
+## Credit
+
+AutoDim is a fork of [DisplayFilter](https://github.com/uyasarkocal/DisplayFilter) by Yaşar Koçal (MIT licensed). The menu bar app, gamma-table dimming and color filters are his work; the daily schedule, color-temperature phases, persistence, launch at login and multi-display fixes were added on top. The original copyright notice is kept in `LICENSE`.
+
+## DisplayFilter
 ![SS 2024-10-03 at 5 02 08 AM](https://github.com/user-attachments/assets/576469a0-4713-4c09-b23a-0d9778651bd1)
 
 
@@ -10,11 +18,14 @@ DisplayFilter is a minimalist macOS app that combines features similar to Monito
 
 ## Features
 
+- Built-in daily schedule: full brightness and no filter from 07:00, then three progressively dimmer and warmer evening phases (defaults 20:00, 22:00, 23:00), each fading in over 10 minutes; all times, brightness and color temperatures are editable
+- Manual changes hold until the next scheduled boundary, then the schedule resumes
+- Optional launch at login (needed for the schedule to run)
 - Adjust screen brightness
 - Apply color filters (Orange, Red, Green, Blue)
 - Control filter intensity
 - Accessible from the menu bar
-- Supports multiple displays
+- Applies to all connected displays
 
 ## Installation
 
@@ -42,10 +53,12 @@ To build DisplayFilter from source:
 2. Open the project in Xcode.
 3. Build and run the project (Cmd + R).
 
+Without Xcode, `./build.sh` compiles the app with the Swift toolchain from the Command Line Tools and ad-hoc signs it into `build/DisplayFilter.app`. `./build.sh debug` adds `--simulate-time HH:MM` and `--debug-window` launch arguments for testing the schedule; `./build.sh check` runs the schedule math checks.
+
 ## Requirements
 
-- macOS 11.0 or later
-- Xcode 12.0 or later (for building from source)
+- macOS 15.0 or later
+- Xcode, or just the Command Line Tools (use `./build.sh`)
 
 ## Contributing
 

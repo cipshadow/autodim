@@ -3,143 +3,79 @@ import Cocoa
 
 class ColorAdjuster {
     static let shared = ColorAdjuster()
-    private let adjustmentLock = NSLock()
-    
-    private var defaultGammaTableRed = [CGGammaValue](repeating: 0, count: 256)
-    private var defaultGammaTableGreen = [CGGammaValue](repeating: 0, count: 256)
-    private var defaultGammaTableBlue = [CGGammaValue](repeating: 0, count: 256)
-    private var defaultGammaTableSampleCount: UInt32 = 0
-    
-    private var lastAppliedBrightness: [CGDirectDisplayID: Float] = [:]
-    private var lastAppliedFilterColor: [CGDirectDisplayID: FilterColor] = [:]
-    private var lastAppliedFilterIntensity: [CGDirectDisplayID: Float] = [:]
-    
-    private var updateTimer: Timer?
-    private var pendingUpdates: [CGDirectDisplayID: (brightness: Float, filterColor: FilterColor, filterIntensity: Float)] = [:]
-    
-    private let minimumBrightness: Float = 0.05 // 5% minimum brightness
-    
+    static let minimumBrightness: Double = 0.05
+
+    private struct Baseline {
+        var red: [CGGammaValue]
+        var green: [CGGammaValue]
+        var blue: [CGGammaValue]
+        var count: UInt32
+    }
+
+    private var baselines: [CGDirectDisplayID: Baseline] = [:]
+    private var lastApplied: [CGDirectDisplayID: String] = [:]
+
     private init() {
-        updateDefaultGammaTables()
+        CGDisplayRestoreColorSyncSettings()
     }
-    
-    // Store the default gamma tables for each screen
-    private func updateDefaultGammaTables() {
-        for screen in NSScreen.screens {
-            if let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID {
-                CGGetDisplayTransferByTable(displayID, 256, &defaultGammaTableRed, &defaultGammaTableGreen, &defaultGammaTableBlue, &defaultGammaTableSampleCount)
-            }
-        }
+
+    static func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
+        screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
     }
-    
-    // Schedule adjustments to be applied
-    func setAdjustments(brightness: Float, filterColor: FilterColor, filterIntensity: Float, for screen: NSScreen) {
-        guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
-            return
-        }
-        
-        let clampedBrightness = max(minimumBrightness, min(1, brightness))
-        let clampedFilterIntensity = max(0, min(1, filterIntensity))
-        
-        pendingUpdates[displayID] = (brightness: clampedBrightness, filterColor: filterColor, filterIntensity: clampedFilterIntensity)
-        
-        if updateTimer == nil {
-            updateTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                self?.applyPendingUpdates()
-            }
-        }
+
+    private func baseline(for displayID: CGDirectDisplayID) -> Baseline {
+        if let existing = baselines[displayID] { return existing }
+        var red = [CGGammaValue](repeating: 0, count: 256)
+        var green = [CGGammaValue](repeating: 0, count: 256)
+        var blue = [CGGammaValue](repeating: 0, count: 256)
+        var count: UInt32 = 0
+        CGGetDisplayTransferByTable(displayID, 256, &red, &green, &blue, &count)
+        let b = Baseline(red: red, green: green, blue: blue, count: count)
+        baselines[displayID] = b
+        return b
     }
-    
-    // Apply scheduled adjustments
-    private func applyPendingUpdates() {
-        adjustmentLock.lock()
-        defer { adjustmentLock.unlock() }
-        
-        for (displayID, update) in pendingUpdates {
-            if lastAppliedBrightness[displayID] != update.brightness || 
-               lastAppliedFilterColor[displayID] != update.filterColor ||
-               lastAppliedFilterIntensity[displayID] != update.filterIntensity {
-                applyAdjustments(brightness: update.brightness, filterColor: update.filterColor, filterIntensity: update.filterIntensity, for: displayID)
-                lastAppliedBrightness[displayID] = update.brightness
-                lastAppliedFilterColor[displayID] = update.filterColor
-                lastAppliedFilterIntensity[displayID] = update.filterIntensity
-            }
-        }
-        
-        pendingUpdates.removeAll()
-        
-        if pendingUpdates.isEmpty {
-            updateTimer?.invalidate()
-            updateTimer = nil
-        }
-    }
-    
-    // Apply color adjustments to the screen
-    private func applyAdjustments(brightness: Float, filterColor: FilterColor, filterIntensity: Float, for displayID: CGDirectDisplayID) {
-        var adjustedRed = defaultGammaTableRed.map { $0 * CGGammaValue(brightness) }
-        var adjustedGreen = defaultGammaTableGreen.map { $0 * CGGammaValue(brightness) }
-        var adjustedBlue = defaultGammaTableBlue.map { $0 * CGGammaValue(brightness) }
-        
+
+    // Multiplier of a manual color filter; values above 1 boost a channel and are clamped after brightness.
+    static func multipliers(for filterColor: FilterColor, intensity: Double) -> ColorTemperature.RGB {
+        let i = max(0, min(1, intensity))
         switch filterColor {
-        case .orange:
-            adjustedRed = adjustedRed.map { min($0 * CGGammaValue(1 + filterIntensity * 0.5), 1.0) }
-            adjustedGreen = adjustedGreen.map { $0 * CGGammaValue(1 - filterIntensity * 0.3) }
-            adjustedBlue = adjustedBlue.map { $0 * CGGammaValue(1 - filterIntensity * 0.8) }
-        case .red:
-            adjustedRed = adjustedRed.map { min($0 * CGGammaValue(1 + filterIntensity * 0.3), 1.0) }
-            adjustedGreen = adjustedGreen.map { $0 * CGGammaValue(1 - filterIntensity * 0.8) }
-            adjustedBlue = adjustedBlue.map { $0 * CGGammaValue(1 - filterIntensity * 0.8) }
-        case .green:
-            adjustedRed = adjustedRed.map { $0 * CGGammaValue(1 - filterIntensity * 0.8) }
-            adjustedGreen = adjustedGreen.map { min($0 * CGGammaValue(1 + filterIntensity * 0.3), 1.0) }
-            adjustedBlue = adjustedBlue.map { $0 * CGGammaValue(1 - filterIntensity * 0.8) }
-        case .blue:
-            adjustedRed = adjustedRed.map { $0 * CGGammaValue(1 - filterIntensity * 0.8) }
-            adjustedGreen = adjustedGreen.map { $0 * CGGammaValue(1 - filterIntensity * 0.8) }
-            adjustedBlue = adjustedBlue.map { min($0 * CGGammaValue(1 + filterIntensity * 0.3), 1.0) }
-        case .none:
-            break
+        case .none: return .identity
+        case .orange: return .init(r: 1 + i * 0.5, g: 1 - i * 0.3, b: 1 - i * 0.8)
+        case .red: return .init(r: 1 + i * 0.3, g: 1 - i * 0.8, b: 1 - i * 0.8)
+        case .green: return .init(r: 1 - i * 0.8, g: 1 + i * 0.3, b: 1 - i * 0.8)
+        case .blue: return .init(r: 1 - i * 0.8, g: 1 - i * 0.8, b: 1 + i * 0.3)
         }
-        
-        CGSetDisplayTransferByTable(displayID, defaultGammaTableSampleCount, adjustedRed, adjustedGreen, adjustedBlue)
     }
-    
-    // Get current brightness for a screen
-    func getCurrentBrightness(for screen: NSScreen) -> Float {
-        guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
-            return minimumBrightness
+
+    func apply(brightness: Double, rgb: ColorTemperature.RGB, force: Bool = false) {
+        let b = max(Self.minimumBrightness, min(1, brightness))
+        for screen in NSScreen.screens {
+            guard let displayID = Self.displayID(for: screen) else { continue }
+            let key = String(format: "%.4f/%.4f/%.4f/%.4f", b, rgb.r, rgb.g, rgb.b)
+            if !force && lastApplied[displayID] == key { continue }
+            let base = baseline(for: displayID)
+            func scaled(_ table: [CGGammaValue], _ m: Double) -> [CGGammaValue] {
+                let factor = CGGammaValue(b * m)
+                return table.map { min($0 * factor, 1.0) }
+            }
+            let red = scaled(base.red, rgb.r)
+            let green = scaled(base.green, rgb.g)
+            let blue = scaled(base.blue, rgb.b)
+            let err = CGSetDisplayTransferByTable(displayID, base.count, red, green, blue)
+            lastApplied[displayID] = key
+            #if DEBUG
+            var rr = [CGGammaValue](repeating: 0, count: 256), gg = rr, bb = rr
+            var n: UInt32 = 0
+            CGGetDisplayTransferByTable(displayID, 256, &rr, &gg, &bb, &n)
+            fputs(String(format: "applied display %u err %d brightness %.3f rgb %.3f/%.3f/%.3f readback-top %.3f/%.3f/%.3f\n",
+                         displayID, err.rawValue, b, rgb.r, rgb.g, rgb.b, rr[Int(n) - 1], gg[Int(n) - 1], bb[Int(n) - 1]), stderr)
+            #endif
         }
-        
-        return max(minimumBrightness, lastAppliedBrightness[displayID] ?? 1.0)
     }
-    
-    // Get current filter color for a screen
-    func getCurrentFilterColor(for screen: NSScreen) -> FilterColor {
-        guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
-            return .none
-        }
-        
-        return lastAppliedFilterColor[displayID] ?? .none
-    }
-    
-    // Get current filter intensity for a screen
-    func getCurrentFilterIntensity(for screen: NSScreen) -> Float {
-        guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
-            return 0.0
-        }
-        
-        return lastAppliedFilterIntensity[displayID] ?? 0.0
-    }
-    
-    // Reset screen to default settings
-    func resetAdjustments(for screen: NSScreen) {
-        guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
-            return
-        }
-        
-        CGSetDisplayTransferByTable(displayID, defaultGammaTableSampleCount, defaultGammaTableRed, defaultGammaTableGreen, defaultGammaTableBlue)
-        lastAppliedBrightness[displayID] = 1.0
-        lastAppliedFilterColor[displayID] = .none
-        lastAppliedFilterIntensity[displayID] = 0.0
+
+    func restoreAll() {
+        CGDisplayRestoreColorSyncSettings()
+        lastApplied.removeAll()
+        baselines.removeAll()
     }
 }
