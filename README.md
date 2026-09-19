@@ -1,4 +1,12 @@
-# DisplayFilter
+# AutoDim
+
+AutoDim is a macOS menu bar app that dims your screen and removes blue light on a daily schedule, so your display winds down before bedtime. The app itself is still named DisplayFilter.
+
+## Credit
+
+AutoDim is a fork of [DisplayFilter](https://github.com/uyasarkocal/DisplayFilter) by Yaşar Koçal (MIT licensed). The menu bar app, gamma-table dimming and color filters are his work; the daily schedule, color-temperature phases, persistence, launch at login and multi-display fixes were added on top. The original copyright notice is kept in `LICENSE`.
+
+## DisplayFilter
 ![SS 2024-10-03 at 5 02 08 AM](https://github.com/user-attachments/assets/576469a0-4713-4c09-b23a-0d9778651bd1)
 
 
