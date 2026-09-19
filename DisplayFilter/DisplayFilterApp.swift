@@ -2,47 +2,27 @@ import SwiftUI
 
 @main
 struct DisplayFilterApp: App {
-    @StateObject private var appState = AppState()
-    
+    // Created eagerly (not @StateObject): the menu bar window content is lazy, and the schedule must run before it is ever opened.
+    private let appState = AppState.shared
+
     var body: some Scene {
-        MenuBarExtra("Display Filter", systemImage: "sun.max.fill") {
+        MenuBarExtra("Display Filter", systemImage: "moonphase.first.quarter") {
             ContentView()
                 .environmentObject(appState)
-                .frame(width: 280)
         }
         .menuBarExtraStyle(.window)
     }
-    
+
+    #if DEBUG
     init() {
-        setupWorkspaceNotifications()
-    }
-    
-    // Set up notifications for when the active space changes
-    private func setupWorkspaceNotifications() {
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.activeSpaceDidChangeNotification,
-            object: nil,
-            queue: .main
-        ) { _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                reapplyAdjustments()
-            }
+        guard CommandLine.arguments.contains("--debug-window") else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let window = NSWindow(contentViewController: NSHostingController(rootView: ContentView().environmentObject(AppState.shared)))
+            window.title = "DisplayFilter (debug)"
+            window.setFrameOrigin(NSPoint(x: 60, y: 120))
+            window.level = .floating
+            window.makeKeyAndOrderFront(nil)
         }
     }
-    
-    // Reapply adjustments to all screens
-    private func reapplyAdjustments() {
-        for screen in NSScreen.screens {
-            let brightness = ColorAdjuster.shared.getCurrentBrightness(for: screen)
-            let filterColor = ColorAdjuster.shared.getCurrentFilterColor(for: screen)
-            let filterIntensity = ColorAdjuster.shared.getCurrentFilterIntensity(for: screen)
-            ColorAdjuster.shared.setAdjustments(brightness: brightness, filterColor: filterColor, filterIntensity: filterIntensity, for: screen)
-        }
-    }
+    #endif
 }
-
-class AppState: ObservableObject {
-    @Published var isFilterActive: Bool = false
-}
-
-// Note: The AppDelegate class seems unnecessary for this app structure and can be removed.

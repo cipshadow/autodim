@@ -3,119 +3,164 @@ import AppKit
 
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
-    @State private var brightness: Double = 1.0
-    @State private var colorFilterIntensity: Double = 0.0
-    @State private var selectedColor: FilterColor = .none
-    @State private var showIntensitySlider: Bool = false
     @Namespace private var animation
-    
-    private let minimumBrightness: Double = 0.05 // 5% minimum brightness
-    
+    @LocalState private var showPhases = false
+
+    private var brightness: Binding<Double> {
+        Binding(get: { appState.effective.brightness }, set: { appState.setBrightness($0) })
+    }
+
+    private var intensity: Binding<Double> {
+        Binding(get: { appState.colorOverride?.intensity ?? 0 }, set: { appState.setIntensity($0) })
+    }
+
+    private var selectedColor: FilterColor? { appState.colorOverride?.color }
+    private var showIntensitySlider: Bool { selectedColor != nil && selectedColor != FilterColor.none }
+
     var body: some View {
-        VStack(spacing: 16) {
-            Section(header: 
-                HStack {
-                    Text("Display filter").font(.headline)
-                    Spacer()
-                    IconButton(icon: "arrow.counterclockwise", action: toggleFilter)
-                    IconButton(icon: "xmark.circle", action: {
-                        NSApplication.shared.terminate(nil)
-                    })
-                }
-            ) {
+        VStack(spacing: 8) {
+            HStack {
+                Text("Display filter").font(.headline)
+                Spacer()
+                IconButton(icon: "arrow.counterclockwise", action: appState.resumeSchedule)
+                    .help("Resume schedule")
+                IconButton(icon: "xmark.circle", action: {
+                    NSApplication.shared.terminate(nil)
+                })
+            }
+            .padding(.horizontal, 8)
+
+            FilterCard { statusView }
+
+            FilterCard {
+                ModernFilterSlider(value: brightness, label: "Brightness", icon: "sun.max.fill", range: ColorAdjuster.minimumBrightness...1)
+            }
+
+            FilterCard {
                 VStack(spacing: 8) {
-                    FilterCard {
-                        ModernFilterSlider(value: $brightness, label: "Brightness", icon: "sun.max.fill", range: minimumBrightness...1)
-                            .onChange(of: brightness) { _, newValue in
-                                applyAdjustments()
-                            }
-                    }
-                    
-                    FilterCard {
-                        VStack(spacing: 8) {
-                            HStack {
-                                Text("Color Filter")
-                                    .font(.subheadline)
-                                    .foregroundColor(.primary)
-                                Spacer()
-                                HStack(spacing: 4) {
-                                    ForEach(FilterColor.allCases, id: \.self) { color in
-                                        ColorDot(color: color, isSelected: selectedColor == color, namespace: animation)
-                                            .onTapGesture {
-                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                                    if selectedColor == color && color != .none {
-                                                        selectedColor = .none
-                                                        showIntensitySlider = false
-                                                    } else {
-                                                        selectedColor = color
-                                                        showIntensitySlider = color != .none
-                                                    }
-                                                }
-                                                applyAdjustments()
+                    HStack {
+                        Text("Color Filter")
+                            .font(.subheadline)
+                            .foregroundColor(.primary)
+                        Spacer()
+                        HStack(spacing: 4) {
+                            ForEach(FilterColor.allCases, id: \.self) { color in
+                                ColorDot(color: color, isSelected: selectedColor == color, namespace: animation)
+                                    .onTapGesture {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                            if selectedColor == color && color != .none {
+                                                appState.setColor(.none)
+                                            } else {
+                                                appState.setColor(color)
                                             }
+                                        }
                                     }
-                                }
-                            }
-                            if showIntensitySlider {
-                                ModernFilterSlider(value: $colorFilterIntensity, label: "Intensity", icon: "slider.horizontal.3", range: 0...1)
-                                    .onChange(of: colorFilterIntensity) { _, newValue in
-                                        applyAdjustments()
-                                    }
-                                    .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .scale.combined(with: .opacity)))
-                                    .matchedGeometryEffect(id: "intensitySlider", in: animation)
                             }
                         }
                     }
+                    if showIntensitySlider {
+                        ModernFilterSlider(value: intensity, label: "Intensity", icon: "slider.horizontal.3", range: 0...1)
+                            .transition(.asymmetric(insertion: .scale.combined(with: .opacity), removal: .scale.combined(with: .opacity)))
+                            .matchedGeometryEffect(id: "intensitySlider", in: animation)
+                    }
                 }
-            }.padding(.horizontal, 8)
+            }
+
+            FilterCard { scheduleView }
         }
         .padding(14)
         .frame(width: 300)
-        .onAppear {
-            updateCurrentValues()
+    }
+
+    private var statusView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Image(systemName: "moon.stars.fill").foregroundColor(.secondary)
+                Text(phaseLine).font(.subheadline)
+                Spacer()
+            }
+            if let until = appState.overrideUntil {
+                HStack {
+                    Text("Manual until \(appState.timeText(until))")
+                        .font(.caption).foregroundColor(.secondary)
+                    Spacer()
+                    Button("Resume") { appState.resumeSchedule() }
+                        .buttonStyle(.link).font(.caption)
+                }
+            } else if appState.hasOverride {
+                Text("Manual, schedule is off").font(.caption).foregroundColor(.secondary)
+            } else if let next = appState.nextChange {
+                Text("Next change at \(appState.timeText(next))")
+                    .font(.caption).foregroundColor(.secondary)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
-    
-    private func applyAdjustments() {
-        guard let screen = NSScreen.main else { return }
-        ColorAdjuster.shared.setAdjustments(
-            brightness: Float(brightness),
-            filterColor: selectedColor,
-            filterIntensity: Float(colorFilterIntensity),
-            for: screen
-        )
-        appState.isFilterActive = true
+
+    private var phaseLine: String {
+        guard appState.config.enabled else { return "Schedule off" }
+        return appState.effective.isFading ? "\(appState.effective.phaseName), fading in" : appState.effective.phaseName
     }
-    
-    private func toggleFilter() {
-        if appState.isFilterActive {
-            resetFilter()
-        } else {
-            applyAdjustments()
+
+    private var scheduleView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Daily schedule", isOn: $appState.config.enabled)
+                .font(.subheadline)
+            DisclosureGroup("Phases", isExpanded: $showPhases) {
+                VStack(spacing: 10) {
+                    ForEach($appState.config.phases) { $phase in
+                        PhaseRow(phase: $phase)
+                    }
+                    Stepper("Fade: \(appState.config.fadeMinutes) min", value: $appState.config.fadeMinutes, in: 0...60, step: 5)
+                        .font(.caption)
+                    Button("Restore defaults") { appState.config = .default }
+                        .font(.caption)
+                }
+                .padding(.top, 6)
+            }
+            .font(.subheadline)
+            Toggle("Launch at login", isOn: Binding(get: { appState.launchAtLogin }, set: { appState.setLaunchAtLogin($0) }))
+                .font(.subheadline)
+            if let error = appState.launchError {
+                Text(error).font(.caption).foregroundColor(.red)
+            }
         }
-    }
-    
-    private func resetFilter() {
-        guard let screen = NSScreen.main else { return }
-        ColorAdjuster.shared.resetAdjustments(for: screen)
-        appState.isFilterActive = false
-        updateCurrentValues()
-    }
-    
-    private func updateCurrentValues() {
-        guard let screen = NSScreen.main else { return }
-        brightness = Double(ColorAdjuster.shared.getCurrentBrightness(for: screen))
-        selectedColor = ColorAdjuster.shared.getCurrentFilterColor(for: screen)
-        colorFilterIntensity = Double(ColorAdjuster.shared.getCurrentFilterIntensity(for: screen))
-        showIntensitySlider = selectedColor != .none
     }
 }
+
+struct PhaseRow: View {
+    @Binding var phase: SchedulePhase
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(phase.name).font(.caption).fontWeight(.semibold)
+                Spacer()
+                Stepper(value: $phase.startMinute, in: 0...1425, step: 15) {
+                    Text(Schedule.timeString(minute: phase.startMinute)).font(.caption).monospacedDigit()
+                }
+            }
+            HStack(spacing: 6) {
+                Text("Bright").font(.caption2).foregroundColor(.secondary).frame(width: 40, alignment: .leading)
+                Slider(value: $phase.brightness, in: ColorAdjuster.minimumBrightness...1)
+                Text("\(Int(phase.brightness * 100))%").font(.caption2).monospacedDigit().frame(width: 44, alignment: .trailing)
+            }
+            HStack(spacing: 6) {
+                Text("Warmth").font(.caption2).foregroundColor(.secondary).frame(width: 40, alignment: .leading)
+                Slider(value: $phase.kelvin, in: 1500...6500, step: 100)
+                Text(verbatim: phase.kelvin >= ScheduleConfig.neutralKelvin ? "none" : "\(Int(phase.kelvin))K")
+                    .font(.caption2).monospacedDigit().frame(width: 44, alignment: .trailing)
+            }
+        }
+    }
+}
+
 
 struct IconButton: View {
     let icon: String
     let action: () -> Void
     
-    @State private var isHovered = false
+    @LocalState private var isHovered = false
     
     var body: some View {
         Button(action: action) {
@@ -287,4 +332,21 @@ struct ColorDot: View {
         )
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
+}
+
+// SwiftUI's @State is a macro whose plugin ships only with full Xcode; this wrapper lets build.sh compile with Command Line Tools.
+@propertyWrapper
+struct LocalState<Value>: DynamicProperty {
+    private var storage: State<Value>
+
+    init(wrappedValue: Value) {
+        storage = State(initialValue: wrappedValue)
+    }
+
+    var wrappedValue: Value {
+        get { storage.wrappedValue }
+        nonmutating set { storage.wrappedValue = newValue }
+    }
+
+    var projectedValue: Binding<Value> { storage.projectedValue }
 }
