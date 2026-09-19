@@ -20,7 +20,7 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                Text("Display filter").font(.headline)
+                Text("AutoDim").font(.headline)
                 Spacer()
                 IconButton(icon: "arrow.counterclockwise", action: appState.resumeSchedule)
                     .help("Resume schedule")
