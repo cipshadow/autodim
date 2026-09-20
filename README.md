@@ -21,7 +21,11 @@ Brightness is a software gamma adjustment. It does not change the display's hard
 
 ## Install
 
-Requires macOS 15.0 or later.
+Requires macOS 15.0 or later on Apple Silicon (the build targets arm64; Intel Macs are not supported).
+
+**Download:** get `AutoDim-1.0.0.zip` from [Releases](https://github.com/cipshadow/autodim/releases), unzip it and move `AutoDim.app` to `/Applications`. The app is ad-hoc signed, not notarized, so macOS blocks the first launch. Either open System Settings, Privacy & Security, and choose "Open Anyway", or run `xattr -dr com.apple.quarantine /Applications/AutoDim.app` once.
+
+**Or build from source:**
 
 1. Clone this repository.
 2. Run `./build.sh` (needs only the Xcode Command Line Tools, not full Xcode). It builds and ad-hoc signs `build/AutoDim.app`.
