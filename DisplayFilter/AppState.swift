@@ -1,5 +1,4 @@
 import SwiftUI
-import ServiceManagement
 
 struct ColorOverride: Equatable {
     var color: FilterColor
@@ -22,6 +21,7 @@ final class AppState: ObservableObject {
             save()
             if !config.enabled {
                 overrideUntil = nil
+                pausedUntil = nil
             } else if hasOverride {
                 overrideUntil = Schedule.nextBoundary(after: now, config: config)
             }
@@ -33,14 +33,16 @@ final class AppState: ObservableObject {
     @Published private(set) var overrideUntil: Date?
     @Published private(set) var effective = EffectiveState(brightness: 1, rgb: .identity, phaseName: "", isFading: false)
     @Published private(set) var nextChange: Date?
-    @Published private(set) var launchAtLogin: Bool
-    @Published var launchError: String?
+    @Published private(set) var pausedUntil: Date?
+    @Published private(set) var currentPhase = ""
 
     private var timeOffset: TimeInterval = 0
     private var timer: Timer?
 
     var now: Date { Date().addingTimeInterval(timeOffset) }
     var hasOverride: Bool { brightnessOverride != nil || colorOverride != nil }
+    var isPaused: Bool { pausedUntil != nil }
+    var nextDayStart: Date? { Schedule.nextDayStart(after: now, config: config) }
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.configKey),
@@ -49,7 +51,6 @@ final class AppState: ObservableObject {
         } else {
             config = .default
         }
-        launchAtLogin = SMAppService.mainApp.status == .enabled
 
         #if DEBUG
         let args = CommandLine.arguments
@@ -78,12 +79,19 @@ final class AppState: ObservableObject {
             overrideUntil = nil
         }
 
+        if let until = pausedUntil, now >= until { pausedUntil = nil }
+
+        let scheduled = Schedule.target(at: now, config: config)
         let target: ScheduleTarget
-        if config.enabled {
-            target = Schedule.target(at: now, config: config)
-        } else {
+        if !config.enabled {
             target = ScheduleTarget(brightness: 1, kelvin: ScheduleConfig.neutralKelvin, phaseName: "Schedule off", isFading: false)
+        } else if isPaused {
+            target = ScheduleTarget(brightness: 1, kelvin: ScheduleConfig.neutralKelvin, phaseName: "Paused", isFading: false)
+        } else {
+            target = scheduled
         }
+        let phase = config.enabled ? scheduled.phaseName : ""
+        if phase != currentPhase { currentPhase = phase }
 
         let brightness = brightnessOverride ?? target.brightness
         let rgb: ColorTemperature.RGB
@@ -122,17 +130,23 @@ final class AppState: ObservableObject {
         brightnessOverride = nil
         colorOverride = nil
         overrideUntil = nil
+        pausedUntil = nil
         refresh()
     }
 
-    func setLaunchAtLogin(_ enabled: Bool) {
-        do {
-            if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
-            launchError = nil
-        } catch {
-            launchError = error.localizedDescription
-        }
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+    func pauseUntilNextPhase() {
+        pausedUntil = Schedule.nextBoundary(after: now, config: config) ?? now.addingTimeInterval(3600)
+        refresh()
+    }
+
+    func pause(forHours hours: Double) {
+        pausedUntil = now.addingTimeInterval(hours * 3600)
+        refresh()
+    }
+
+    func pauseUntilTomorrow() {
+        pausedUntil = nextDayStart ?? now.addingTimeInterval(24 * 3600)
+        refresh()
     }
 
     func timeText(_ date: Date) -> String {

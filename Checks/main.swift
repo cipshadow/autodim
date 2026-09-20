@@ -53,6 +53,11 @@ check("next boundary after 23:30 is 07:00 next day", n2 == cal.date(byAdding: .d
 let n3 = Schedule.nextBoundary(after: at(22, 0), config: cfg, calendar: cal)
 check("next boundary after 22:00 sharp is 23:00", n3 == at(23, 0), "\(String(describing: n3))")
 
+let d1 = Schedule.nextDayStart(after: at(21, 0), config: cfg, calendar: cal)
+check("next day start after 21:00 is 07:00 next day", d1 == cal.date(byAdding: .day, value: 1, to: at(7, 0)), "\(String(describing: d1))")
+let d2 = Schedule.nextDayStart(after: at(6, 0), config: cfg, calendar: cal)
+check("next day start after 06:00 is 07:00 same day", d2 == at(7, 0), "\(String(describing: d2))")
+
 for k in [6500.0, 4600, 2700, 2200, 1700] {
     let m = ColorTemperature.multipliers(kelvin: k)
     print(String(format: "INFO %.0fK -> R %.3f G %.3f B %.3f", k, m.r, m.g, m.b))
