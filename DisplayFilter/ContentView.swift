@@ -4,7 +4,8 @@ import AppKit
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
     @Namespace private var animation
-    @LocalState private var showPhases = false
+    @LocalState private var tab = 0
+    @LocalState private var selectedPhase = "Evening"
 
     private var brightness: Binding<Double> {
         Binding(get: { appState.effective.brightness }, set: { appState.setBrightness($0) })
@@ -30,6 +31,23 @@ struct ContentView: View {
             }
             .padding(.horizontal, 8)
 
+            Picker("View", selection: $tab) {
+                Text("Now").tag(0)
+                Text("Schedule").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            if tab == 0 { nowTab } else { scheduleTab }
+        }
+        .padding(14)
+        .frame(width: 300)
+    }
+
+    // MARK: Now tab
+
+    private var nowTab: some View {
+        VStack(spacing: 8) {
             FilterCard { statusView }
 
             FilterCard {
@@ -65,21 +83,27 @@ struct ContentView: View {
                     }
                 }
             }
-
-            FilterCard { scheduleView }
         }
-        .padding(14)
-        .frame(width: 300)
     }
 
     private var statusView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Image(systemName: "moon.stars.fill").foregroundColor(.secondary)
-                Text(phaseLine).font(.subheadline)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: appState.isPaused ? "pause.circle" : "moon.stars.fill")
+                    .foregroundColor(appState.isPaused ? .orange : .secondary)
+                Text(titleLine).font(.subheadline).fontWeight(.semibold)
                 Spacer()
+                if appState.isPaused {
+                    Button("Resume") { appState.resumeSchedule() }
+                        .buttonStyle(.borderedProminent)
+                } else if appState.config.enabled {
+                    pauseMenu
+                }
             }
-            if let until = appState.overrideUntil {
+            if appState.isPaused {
+                Text("Normal brightness and color until then.")
+                    .font(.caption).foregroundColor(.secondary)
+            } else if let until = appState.overrideUntil {
                 HStack {
                     Text("Manual until \(appState.timeText(until))")
                         .font(.caption).foregroundColor(.secondary)
@@ -97,64 +121,129 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var phaseLine: String {
+    private var titleLine: String {
         guard appState.config.enabled else { return "Schedule off" }
+        if let until = appState.pausedUntil { return "Paused until \(appState.timeText(until))" }
         return appState.effective.isFading ? "\(appState.effective.phaseName), fading in" : appState.effective.phaseName
     }
 
-    private var scheduleView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle("Daily schedule", isOn: $appState.config.enabled)
-                .font(.subheadline)
-            DisclosureGroup("Phases", isExpanded: $showPhases) {
-                VStack(spacing: 10) {
-                    ForEach($appState.config.phases) { $phase in
-                        PhaseRow(phase: $phase)
-                    }
-                    Stepper("Fade: \(appState.config.fadeMinutes) min", value: $appState.config.fadeMinutes, in: 0...60, step: 5)
-                        .font(.caption)
-                    Button("Restore defaults") { appState.config = .default }
-                        .font(.caption)
-                }
-                .padding(.top, 6)
+    private var pauseMenu: some View {
+        Menu {
+            if let next = appState.nextChange {
+                Button("Until next phase (\(appState.timeText(next)))") { appState.pauseUntilNextPhase() }
             }
-            .font(.subheadline)
-            Toggle("Launch at login", isOn: Binding(get: { appState.launchAtLogin }, set: { appState.setLaunchAtLogin($0) }))
-                .font(.subheadline)
-            if let error = appState.launchError {
-                Text(error).font(.caption).foregroundColor(.red)
+            Button("For 1 hour") { appState.pause(forHours: 1) }
+            if let day = appState.nextDayStart {
+                Button(Calendar.current.isDateInToday(day) ? "Until \(appState.timeText(day))" : "Until tomorrow (\(appState.timeText(day)))") {
+                    appState.pauseUntilTomorrow()
+                }
+            }
+        } label: {
+            Label("Pause", systemImage: "pause.circle")
+        }
+        .fixedSize()
+    }
+
+    // MARK: Schedule tab
+
+    private var scheduleTab: some View {
+        FilterCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Daily schedule").font(.subheadline).fontWeight(.semibold)
+                    Spacer()
+                    Toggle("Daily schedule", isOn: $appState.config.enabled)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+                PhaseStrip(phases: appState.config.phases, selected: selectedPhase, current: appState.currentPhase) {
+                    selectedPhase = $0
+                }
+                if let i = appState.config.phases.firstIndex(where: { $0.name == selectedPhase }) ?? appState.config.phases.indices.first {
+                    PhaseEditor(phase: $appState.config.phases[i], isCurrent: appState.config.phases[i].name == appState.currentPhase)
+                }
+                Divider()
+                HStack {
+                    Text("Fade: \(appState.config.fadeMinutes) min").font(.caption).foregroundColor(.secondary)
+                    Stepper("Fade", value: $appState.config.fadeMinutes, in: 0...60, step: 5).labelsHidden()
+                    Spacer()
+                    Button("Restore defaults") { appState.config = .default }
+                        .buttonStyle(.link).font(.caption)
+                }
             }
         }
     }
 }
 
-struct PhaseRow: View {
-    @Binding var phase: SchedulePhase
+struct PhaseStrip: View {
+    let phases: [SchedulePhase]
+    let selected: String
+    let current: String
+    let select: (String) -> Void
+
+    private func swatch(_ phase: SchedulePhase) -> Color {
+        let m = ColorTemperature.multipliers(kelvin: phase.kelvin)
+        return Color(red: 0.92 * m.r, green: 0.92 * m.g, blue: 0.94 * m.b)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(phase.name).font(.caption).fontWeight(.semibold)
-                Spacer()
-                Stepper(value: $phase.startMinute, in: 0...1425, step: 15) {
-                    Text(Schedule.timeString(minute: phase.startMinute)).font(.caption).monospacedDigit()
+        HStack(spacing: 6) {
+            ForEach(phases.sorted { $0.startMinute < $1.startMinute }) { phase in
+                Button { select(phase.name) } label: {
+                    VStack(spacing: 1) {
+                        Text(verbatim: Schedule.timeString(minute: phase.startMinute))
+                            .font(.system(size: 12, weight: .bold)).monospacedDigit()
+                        Text(verbatim: "\(Int((phase.brightness * 100).rounded()))%")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundColor(Color(white: 0.11))
+                    .frame(maxWidth: .infinity, minHeight: 46)
+                    .background(RoundedRectangle(cornerRadius: 9).fill(swatch(phase)))
+                    .overlay(alignment: .topTrailing) {
+                        if phase.name == current {
+                            Circle().fill(Color(white: 0.11)).frame(width: 6, height: 6).padding(5)
+                        }
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.primary, lineWidth: phase.name == selected ? 2 : 0))
                 }
-            }
-            HStack(spacing: 6) {
-                Text("Bright").font(.caption2).foregroundColor(.secondary).frame(width: 40, alignment: .leading)
-                Slider(value: $phase.brightness, in: ColorAdjuster.minimumBrightness...1)
-                Text("\(Int(phase.brightness * 100))%").font(.caption2).monospacedDigit().frame(width: 44, alignment: .trailing)
-            }
-            HStack(spacing: 6) {
-                Text("Warmth").font(.caption2).foregroundColor(.secondary).frame(width: 40, alignment: .leading)
-                Slider(value: $phase.kelvin, in: 1500...6500, step: 100)
-                Text(verbatim: phase.kelvin >= ScheduleConfig.neutralKelvin ? "none" : "\(Int(phase.kelvin))K")
-                    .font(.caption2).monospacedDigit().frame(width: 44, alignment: .trailing)
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(phase.name), starts \(Schedule.timeString(minute: phase.startMinute)), brightness \(Int((phase.brightness * 100).rounded())) percent")
             }
         }
     }
 }
 
+struct PhaseEditor: View {
+    @Binding var phase: SchedulePhase
+    let isCurrent: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Text(phase.name).font(.subheadline).fontWeight(.semibold)
+                if isCurrent { Text("(now)").font(.subheadline).foregroundColor(.secondary) }
+                Spacer()
+                Text(verbatim: "Starts \(Schedule.timeString(minute: phase.startMinute))")
+                    .font(.subheadline).monospacedDigit()
+                Stepper("Start time", value: $phase.startMinute, in: 0...1425, step: 15).labelsHidden()
+            }
+            row("Bright", value: "\(Int((phase.brightness * 100).rounded()))%") {
+                Slider(value: $phase.brightness, in: ColorAdjuster.minimumBrightness...1)
+            }
+            row("Warmth", value: phase.kelvin >= ScheduleConfig.neutralKelvin ? "none" : "\(Int(phase.kelvin))K") {
+                Slider(value: $phase.kelvin, in: 1500...6500, step: 100)
+            }
+        }
+    }
+
+    private func row<S: View>(_ label: String, value: String, @ViewBuilder slider: () -> S) -> some View {
+        HStack(spacing: 6) {
+            Text(label).font(.caption).foregroundColor(.secondary).frame(width: 46, alignment: .leading)
+            slider()
+            Text(verbatim: value).font(.caption).monospacedDigit().frame(width: 44, alignment: .trailing)
+        }
+    }
+}
 
 struct IconButton: View {
     let icon: String
@@ -278,15 +367,13 @@ struct VisualEffectView: NSViewRepresentable {
 // New components
 
 enum FilterColor: String, CaseIterable {
-    case none, orange, red, green, blue
+    case none, orange, red
     
     var color: Color {
         switch self {
         case .none: return Color(NSColor.lightGray)
         case .orange: return .orange
         case .red: return .red
-        case .green: return .green
-        case .blue: return .blue
         }
     }
     
@@ -295,8 +382,6 @@ enum FilterColor: String, CaseIterable {
         case .none: return "arrow.counterclockwise.circle.fill"
         case .orange: return "sun.max.fill"
         case .red: return "eyeglasses"
-        case .green: return "leaf.fill"
-        case .blue: return "drop.fill"
         }
     }
 }
