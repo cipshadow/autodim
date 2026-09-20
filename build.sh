@@ -12,6 +12,7 @@ if [[ "${1:-release}" == "check" ]]; then
 fi
 
 MODE="${1:-release}"
+BUNDLE_ID="${BUNDLE_ID:-com.cipshadow.autodim}"
 APP=build/AutoDim.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
@@ -26,11 +27,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
 	<key>CFBundleExecutable</key><string>AutoDim</string>
-	<key>CFBundleIdentifier</key><string>com.cipshadow.autodim</string>
+	<key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
 	<key>CFBundleName</key><string>AutoDim</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleShortVersionString</key><string>1.1</string>
-	<key>CFBundleVersion</key><string>2</string>
+	<key>CFBundleShortVersionString</key><string>1.0.0</string>
+	<key>CFBundleVersion</key><string>1</string>
 	<key>LSMinimumSystemVersion</key><string>15.0</string>
 	<key>LSUIElement</key><true/>
 	<key>NSPrincipalClass</key><string>NSApplication</string>

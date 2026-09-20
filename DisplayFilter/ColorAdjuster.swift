@@ -42,8 +42,6 @@ class ColorAdjuster {
         case .none: return .identity
         case .orange: return .init(r: 1 + i * 0.5, g: 1 - i * 0.3, b: 1 - i * 0.8)
         case .red: return .init(r: 1 + i * 0.3, g: 1 - i * 0.8, b: 1 - i * 0.8)
-        case .green: return .init(r: 1 - i * 0.8, g: 1 + i * 0.3, b: 1 - i * 0.8)
-        case .blue: return .init(r: 1 - i * 0.8, g: 1 - i * 0.8, b: 1 + i * 0.3)
         }
     }
 
