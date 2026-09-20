@@ -80,6 +80,15 @@ enum Schedule {
         return best
     }
 
+    static func nextDayStart(after date: Date, config: ScheduleConfig, calendar: Calendar = .current) -> Date? {
+        guard let first = config.phases.min(by: { $0.startMinute < $1.startMinute }) else { return nil }
+        var comps = DateComponents()
+        comps.hour = first.startMinute / 60
+        comps.minute = first.startMinute % 60
+        comps.second = 0
+        return calendar.nextDate(after: date, matching: comps, matchingPolicy: .nextTime)
+    }
+
     static func timeString(minute: Int) -> String {
         String(format: "%02d:%02d", (minute / 60) % 24, minute % 60)
     }
