@@ -134,8 +134,8 @@ final class AppState: ObservableObject {
         refresh()
     }
 
-    func pauseUntilNextPhase() {
-        pausedUntil = Schedule.nextBoundary(after: now, config: config) ?? now.addingTimeInterval(3600)
+    func pauseIndefinitely() {
+        pausedUntil = .distantFuture
         refresh()
     }
 
@@ -144,7 +144,7 @@ final class AppState: ObservableObject {
         refresh()
     }
 
-    func pauseUntilTomorrow() {
+    func pauseUntilMorning() {
         pausedUntil = nextDayStart ?? now.addingTimeInterval(24 * 3600)
         refresh()
     }
