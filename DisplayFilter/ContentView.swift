@@ -101,7 +101,9 @@ struct ContentView: View {
                 }
             }
             if appState.isPaused {
-                Text("Normal brightness and color until then.")
+                Text(appState.pausedUntil == .distantFuture
+                     ? "Normal brightness and color until you resume."
+                     : "Normal brightness and color until then.")
                     .font(.caption).foregroundColor(.secondary)
             } else if let until = appState.overrideUntil {
                 HStack {
@@ -123,20 +125,18 @@ struct ContentView: View {
 
     private var titleLine: String {
         guard appState.config.enabled else { return "Schedule off" }
-        if let until = appState.pausedUntil { return "Paused until \(appState.timeText(until))" }
+        if let until = appState.pausedUntil {
+            return until == .distantFuture ? "Paused" : "Paused until \(appState.timeText(until))"
+        }
         return appState.effective.isFading ? "\(appState.effective.phaseName), fading in" : appState.effective.phaseName
     }
 
     private var pauseMenu: some View {
         Menu {
-            if let next = appState.nextChange {
-                Button("Until next phase (\(appState.timeText(next)))") { appState.pauseUntilNextPhase() }
-            }
+            Button("Until I turn it back on") { appState.pauseIndefinitely() }
             Button("For 1 hour") { appState.pause(forHours: 1) }
             if let day = appState.nextDayStart {
-                Button(Calendar.current.isDateInToday(day) ? "Until \(appState.timeText(day))" : "Until tomorrow (\(appState.timeText(day)))") {
-                    appState.pauseUntilTomorrow()
-                }
+                Button("Until morning (\(appState.timeText(day)))") { appState.pauseUntilMorning() }
             }
         } label: {
             Label("Pause", systemImage: "pause.circle")
