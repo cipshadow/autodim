@@ -127,30 +127,37 @@ final class AppState: ObservableObject {
     }
 
     func resumeSchedule() {
-        brightnessOverride = nil
-        colorOverride = nil
-        overrideUntil = nil
+        clearOverride()
         pausedUntil = nil
         refresh()
     }
 
     func pauseIndefinitely() {
+        clearOverride()
         pausedUntil = .distantFuture
         refresh()
     }
 
     func pause(forHours hours: Double) {
+        clearOverride()
         pausedUntil = now.addingTimeInterval(hours * 3600)
         refresh()
     }
 
     func pauseUntilMorning() {
+        clearOverride()
         pausedUntil = nextDayStart ?? now.addingTimeInterval(24 * 3600)
         refresh()
     }
 
     func timeText(_ date: Date) -> String {
         Schedule.timeString(minute: Int(Schedule.minuteOfDay(date)))
+    }
+
+    private func clearOverride() {
+        brightnessOverride = nil
+        colorOverride = nil
+        overrideUntil = nil
     }
 
     private func beginOverride() {
