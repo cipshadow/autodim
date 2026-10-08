@@ -47,6 +47,7 @@ What the research supports, and what it does not:
 
 - `./build.sh debug` adds the `--simulate-time HH:MM` and `--debug-window` launch arguments for testing the schedule.
 - `./build.sh check` runs the schedule math checks.
+- `VERSION=1.0.1 ./build.sh package` creates `build/AutoDim-1.0.1.zip` and its SHA-256 file, then verifies the extracted app signature. Use this command for release uploads rather than Finder's Compress action.
 - The Xcode project (`DisplayFilter.xcodeproj`) also builds the app but has not been built on the maintainer's machine.
 
 ## License
