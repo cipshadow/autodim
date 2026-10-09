@@ -60,7 +60,10 @@ if [[ "$PACKAGE" == 1 ]]; then
   )
   unzip -q "$ARCHIVE" -d "$VERIFY_ROOT"
   codesign --verify --deep --strict "$VERIFY_ROOT/AutoDim.app"
-  shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
+  (
+    cd build
+    shasum -a 256 "$(basename "$ARCHIVE")" > "$(basename "$ARCHIVE").sha256"
+  )
   echo "Built and verified $ARCHIVE"
   exit 0
 fi
