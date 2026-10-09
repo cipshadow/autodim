@@ -2,6 +2,7 @@
 # Builds AutoDim.app without Xcode (Command Line Tools only).
 # Usage: ./build.sh [debug|release]   (debug adds --simulate-time and logging)
 # ./build.sh check   runs the schedule unit checks.
+# ./build.sh package creates a signed ZIP and verifies it after extraction.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -12,6 +13,11 @@ if [[ "${1:-release}" == "check" ]]; then
 fi
 
 MODE="${1:-release}"
+PACKAGE=0
+if [[ "$MODE" == "package" ]]; then
+  MODE=release
+  PACKAGE=1
+fi
 BUNDLE_ID="${BUNDLE_ID:-com.cipshadow.autodim}"
 APP=build/AutoDim.app
 rm -rf "$APP"
@@ -40,4 +46,23 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 codesign --force --sign - --options runtime --entitlements $SRC/DisplayFilter.entitlements "$APP"
+codesign --verify --deep --strict "$APP"
+
+if [[ "$PACKAGE" == 1 ]]; then
+  VERSION="${VERSION:-1.0.0}"
+  ARCHIVE="build/AutoDim-$VERSION.zip"
+  VERIFY_ROOT="$(mktemp -d)"
+
+  rm -f "$ARCHIVE" "$ARCHIVE.sha256"
+  (
+    cd build
+    /usr/bin/zip -qry -X "AutoDim-$VERSION.zip" "AutoDim.app"
+  )
+  unzip -q "$ARCHIVE" -d "$VERIFY_ROOT"
+  codesign --verify --deep --strict "$VERIFY_ROOT/AutoDim.app"
+  shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
+  echo "Built and verified $ARCHIVE"
+  exit 0
+fi
+
 echo "Built $APP ($MODE)"
