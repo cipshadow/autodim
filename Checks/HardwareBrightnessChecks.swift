@@ -1,11 +1,18 @@
 import Foundation
 
 func runHardwareBrightnessChecks() {
-    let systemBackend = MacHardwareBrightnessBackend()
-    let systemDisplays = systemBackend.connectedDisplays()
-    check("discovers the built-in hardware brightness control", !systemDisplays.isEmpty)
-    if let builtIn = systemDisplays.first {
-        check("reads built-in hardware brightness", systemBackend.readBrightness(for: builtIn) != nil)
+    // GitHub's hosted macOS VMs expose no physical display backlight or DDC
+    // transport. Keep the real-hardware smoke test for developer Macs, while
+    // exercising the controller's logic with the deterministic backend below.
+    if ProcessInfo.processInfo.environment["CI"] == nil {
+        let systemBackend = MacHardwareBrightnessBackend()
+        let systemDisplays = systemBackend.connectedDisplays()
+        check("discovers the built-in hardware brightness control", !systemDisplays.isEmpty)
+        if let builtIn = systemDisplays.first {
+            check("reads built-in hardware brightness", systemBackend.readBrightness(for: builtIn) != nil)
+        }
+    } else {
+        print("INFO hardware discovery skipped on a hosted CI runner")
     }
 
     let builtIn = BrightnessDisplay(id: 1, key: "builtin", name: "MacBook")
