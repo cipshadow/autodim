@@ -2,13 +2,19 @@
 # Builds AutoDim.app without Xcode (Command Line Tools only).
 # Usage: ./build.sh [debug|release]   (debug adds --simulate-time and logging)
 # ./build.sh check   runs the schedule unit checks.
-# ./build.sh package creates a signed ZIP and verifies it after extraction.
+# ./build.sh package creates a universal DMG and verifies it after mounting.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 SRC=DisplayFilter
+MINIMUM_MACOS=13.0
+ARCHS=(arm64 x86_64)
+LINK_FLAGS=(-Xlinker -F -Xlinker /System/Library/PrivateFrameworks -Xlinker -weak_framework -Xlinker CoreDisplay -Xlinker -weak_framework -Xlinker DisplayServices)
 if [[ "${1:-release}" == "check" ]]; then
-  swiftc Checks/main.swift $SRC/Schedule.swift $SRC/ColorTemperature.swift -o build/checks 2>/dev/null || { mkdir -p build; swiftc Checks/main.swift $SRC/Schedule.swift $SRC/ColorTemperature.swift -o build/checks; }
+  mkdir -p build
+  HOST_ARCH="$(uname -m)"
+  clang -target "$HOST_ARCH-apple-macosx$MINIMUM_MACOS" -c "$SRC/HardwareBrightnessShim.c" -o build/hardware-brightness-shim-checks.o
+  swiftc -target "$HOST_ARCH-apple-macosx$MINIMUM_MACOS" Checks/main.swift Checks/HardwareBrightnessChecks.swift $SRC/Schedule.swift $SRC/ColorTemperature.swift $SRC/DisplayIdentity.swift $SRC/HardwareBrightness.swift build/hardware-brightness-shim-checks.o "${LINK_FLAGS[@]}" -o build/checks
   exec build/checks
 fi
 
@@ -23,9 +29,16 @@ APP=build/AutoDim.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 
-FLAGS=(-parse-as-library -target arm64-apple-macosx15.0)
+FLAGS=(-parse-as-library)
 if [[ "$MODE" == "debug" ]]; then FLAGS+=(-DDEBUG -Onone); else FLAGS+=(-O); fi
-swiftc "${FLAGS[@]}" $SRC/*.swift -o "$APP/Contents/MacOS/AutoDim"
+for ARCH in "${ARCHS[@]}"; do
+  clang -target "$ARCH-apple-macosx$MINIMUM_MACOS" -c "$SRC/HardwareBrightnessShim.c" -o "build/hardware-brightness-shim-$ARCH.o"
+  swiftc "${FLAGS[@]}" -target "$ARCH-apple-macosx$MINIMUM_MACOS" $SRC/*.swift "build/hardware-brightness-shim-$ARCH.o" "${LINK_FLAGS[@]}" -o "$APP/Contents/MacOS/AutoDim-$ARCH"
+done
+lipo -create "$APP/Contents/MacOS/AutoDim-arm64" "$APP/Contents/MacOS/AutoDim-x86_64" -output "$APP/Contents/MacOS/AutoDim"
+rm -f "$APP/Contents/MacOS/AutoDim-arm64" "$APP/Contents/MacOS/AutoDim-x86_64"
+lipo "$APP/Contents/MacOS/AutoDim" -verify_arch arm64
+lipo "$APP/Contents/MacOS/AutoDim" -verify_arch x86_64
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -38,7 +51,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>1.0.0</string>
 	<key>CFBundleVersion</key><string>1</string>
-	<key>LSMinimumSystemVersion</key><string>15.0</string>
+	<key>LSMinimumSystemVersion</key><string>$MINIMUM_MACOS</string>
 	<key>LSUIElement</key><true/>
 	<key>NSPrincipalClass</key><string>NSApplication</string>
 </dict>
@@ -50,16 +63,23 @@ codesign --verify --deep --strict "$APP"
 
 if [[ "$PACKAGE" == 1 ]]; then
   VERSION="${VERSION:-1.0.0}"
-  ARCHIVE="build/AutoDim-$VERSION.zip"
+  # GitHub pull-request refs contain a slash (for example, "8/merge").
+  # Release artifact filenames must remain flat.
+  VERSION="${VERSION//\//-}"
+  ARCHIVE="build/AutoDim-$VERSION.dmg"
   VERIFY_ROOT="$(mktemp -d)"
+  STAGE_ROOT="$(mktemp -d)"
 
   rm -f "$ARCHIVE" "$ARCHIVE.sha256"
-  (
-    cd build
-    /usr/bin/zip -qry -X "AutoDim-$VERSION.zip" "AutoDim.app"
-  )
-  unzip -q "$ARCHIVE" -d "$VERIFY_ROOT"
-  codesign --verify --deep --strict "$VERIFY_ROOT/AutoDim.app"
+  cp -R "$APP" "$STAGE_ROOT/AutoDim.app"
+  ln -s /Applications "$STAGE_ROOT/Applications"
+  hdiutil create -volname "AutoDim" -srcfolder "$STAGE_ROOT" -ov -format UDZO "$ARCHIVE" >/dev/null
+  hdiutil verify "$ARCHIVE" >/dev/null
+  MOUNT_POINT="$(hdiutil attach -readonly -nobrowse -mountpoint "$VERIFY_ROOT" "$ARCHIVE" | tail -1 | awk '{print $NF}')"
+  codesign --verify --deep --strict "$MOUNT_POINT/AutoDim.app"
+  lipo "$MOUNT_POINT/AutoDim.app/Contents/MacOS/AutoDim" -verify_arch arm64
+  lipo "$MOUNT_POINT/AutoDim.app/Contents/MacOS/AutoDim" -verify_arch x86_64
+  hdiutil detach "$MOUNT_POINT" >/dev/null
   (
     cd build
     shasum -a 256 "$(basename "$ARCHIVE")" > "$(basename "$ARCHIVE").sha256"

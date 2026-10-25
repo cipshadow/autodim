@@ -35,9 +35,15 @@ final class AppState: ObservableObject {
     @Published private(set) var nextChange: Date?
     @Published private(set) var pausedUntil: Date?
     @Published private(set) var currentPhase = ""
+    @Published private(set) var brightnessControlSummary = ""
 
     private var timeOffset: TimeInterval = 0
     private var timer: Timer?
+    private var reapplyWorkItem: DispatchWorkItem?
+    private let hardwareBrightness = HardwareBrightnessController(
+        backend: MacHardwareBrightnessBackend(),
+        store: UserDefaultsBrightnessRestorationStore()
+    )
 
     var now: Date { Date().addingTimeInterval(timeOffset) }
     var hasOverride: Bool { brightnessOverride != nil || colorOverride != nil }
@@ -63,6 +69,7 @@ final class AppState: ObservableObject {
         }
         #endif
 
+        hardwareBrightness.recoverPendingRestoration()
         registerObservers()
         refresh(force: true)
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
@@ -106,7 +113,10 @@ final class AppState: ObservableObject {
         let next = config.enabled ? Schedule.nextBoundary(after: now, config: config) : nil
         if next != nextChange { nextChange = next }
 
-        ColorAdjuster.shared.apply(brightness: brightness, rgb: rgb, force: force)
+        let hardwareIDs = hardwareBrightness.apply(multiplier: brightness)
+        let summary = controlSummary()
+        if summary != brightnessControlSummary { brightnessControlSummary = summary }
+        ColorAdjuster.shared.apply(brightness: brightness, rgb: rgb, hardwareBrightnessDisplays: hardwareIDs, force: force)
     }
 
     func setBrightness(_ value: Double) {
@@ -172,9 +182,7 @@ final class AppState: ObservableObject {
     }
 
     private func registerObservers() {
-        let reapply: (Notification) -> Void = { [weak self] _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { self?.refresh(force: true) }
-        }
+        let reapply: (Notification) -> Void = { [weak self] _ in self?.scheduleReapply() }
         let workspace = NSWorkspace.shared.notificationCenter
         workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: reapply)
         workspace.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main, using: reapply)
@@ -186,7 +194,27 @@ final class AppState: ObservableObject {
         center.addObserver(forName: .NSSystemTimeZoneDidChange, object: nil, queue: .main, using: reapply)
         center.addObserver(forName: .NSCalendarDayChanged, object: nil, queue: .main, using: reapply)
         center.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { _ in
+            self.hardwareBrightness.restoreAll()
             ColorAdjuster.shared.restoreAll()
         }
+    }
+
+    private func scheduleReapply() {
+        reapplyWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.hardwareBrightness.invalidateDisplays()
+            self?.refresh(force: true)
+        }
+        reapplyWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+    }
+
+    private func controlSummary() -> String {
+        let hardware = hardwareBrightness.displays.filter { hardwareBrightness.hardwareControlledIDs.contains($0.id) }.map(\.name)
+        let fallback = hardwareBrightness.displays.filter { hardwareBrightness.softwareFallbackIDs.contains($0.id) }.map(\.name)
+        var parts: [String] = []
+        if !hardware.isEmpty { parts.append("Hardware: \(hardware.joined(separator: ", "))") }
+        if !fallback.isEmpty { parts.append("Software filter: \(fallback.joined(separator: ", "))") }
+        return parts.joined(separator: " • ")
     }
 }

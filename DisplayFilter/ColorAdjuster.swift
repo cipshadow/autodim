@@ -19,10 +19,6 @@ class ColorAdjuster {
         CGDisplayRestoreColorSyncSettings()
     }
 
-    static func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
-        screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
-    }
-
     private func baseline(for displayID: CGDirectDisplayID) -> Baseline {
         if let existing = baselines[displayID] { return existing }
         var red = [CGGammaValue](repeating: 0, count: 256)
@@ -45,15 +41,16 @@ class ColorAdjuster {
         }
     }
 
-    func apply(brightness: Double, rgb: ColorTemperature.RGB, force: Bool = false) {
+    func apply(brightness: Double, rgb: ColorTemperature.RGB, hardwareBrightnessDisplays: Set<CGDirectDisplayID> = [], force: Bool = false) {
         let b = max(Self.minimumBrightness, min(1, brightness))
         for screen in NSScreen.screens {
-            guard let displayID = Self.displayID(for: screen) else { continue }
-            let key = String(format: "%.4f/%.4f/%.4f/%.4f", b, rgb.r, rgb.g, rgb.b)
+            guard let displayID = displayID(for: screen) else { continue }
+            let displayBrightness = hardwareBrightnessDisplays.contains(displayID) ? 1.0 : b
+            let key = String(format: "%.4f/%.4f/%.4f/%.4f", displayBrightness, rgb.r, rgb.g, rgb.b)
             if !force && lastApplied[displayID] == key { continue }
             let base = baseline(for: displayID)
             func scaled(_ table: [CGGammaValue], _ m: Double) -> [CGGammaValue] {
-                let factor = CGGammaValue(b * m)
+                let factor = CGGammaValue(displayBrightness * m)
                 return table.map { min($0 * factor, 1.0) }
             }
             let red = scaled(base.red, rgb.r)
@@ -66,7 +63,7 @@ class ColorAdjuster {
             var n: UInt32 = 0
             CGGetDisplayTransferByTable(displayID, 256, &rr, &gg, &bb, &n)
             fputs(String(format: "applied display %u err %d brightness %.3f rgb %.3f/%.3f/%.3f readback-top %.3f/%.3f/%.3f\n",
-                         displayID, err.rawValue, b, rgb.r, rgb.g, rgb.b, rr[Int(n) - 1], gg[Int(n) - 1], bb[Int(n) - 1]), stderr)
+                         displayID, err.rawValue, displayBrightness, rgb.r, rgb.g, rgb.b, rr[Int(n) - 1], gg[Int(n) - 1], bb[Int(n) - 1]), stderr)
             #endif
         }
     }

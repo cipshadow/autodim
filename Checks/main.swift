@@ -66,5 +66,7 @@ let warm = ColorTemperature.multipliers(kelvin: 2700)
 check("6500K is identity", ColorTemperature.multipliers(kelvin: 6500) == .identity)
 check("2700K keeps red, cuts blue more than green", warm.r == 1 && warm.b < warm.g && warm.g < 1)
 
+runHardwareBrightnessChecks()
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)
