@@ -37,8 +37,8 @@ for ARCH in "${ARCHS[@]}"; do
 done
 lipo -create "$APP/Contents/MacOS/AutoDim-arm64" "$APP/Contents/MacOS/AutoDim-x86_64" -output "$APP/Contents/MacOS/AutoDim"
 rm -f "$APP/Contents/MacOS/AutoDim-arm64" "$APP/Contents/MacOS/AutoDim-x86_64"
-lipo -verify_arch arm64 "$APP/Contents/MacOS/AutoDim"
-lipo -verify_arch x86_64 "$APP/Contents/MacOS/AutoDim"
+lipo "$APP/Contents/MacOS/AutoDim" -verify_arch arm64
+lipo "$APP/Contents/MacOS/AutoDim" -verify_arch x86_64
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -77,8 +77,8 @@ if [[ "$PACKAGE" == 1 ]]; then
   hdiutil verify "$ARCHIVE" >/dev/null
   MOUNT_POINT="$(hdiutil attach -readonly -nobrowse -mountpoint "$VERIFY_ROOT" "$ARCHIVE" | tail -1 | awk '{print $NF}')"
   codesign --verify --deep --strict "$MOUNT_POINT/AutoDim.app"
-  lipo -verify_arch arm64 "$MOUNT_POINT/AutoDim.app/Contents/MacOS/AutoDim"
-  lipo -verify_arch x86_64 "$MOUNT_POINT/AutoDim.app/Contents/MacOS/AutoDim"
+  lipo "$MOUNT_POINT/AutoDim.app/Contents/MacOS/AutoDim" -verify_arch arm64
+  lipo "$MOUNT_POINT/AutoDim.app/Contents/MacOS/AutoDim" -verify_arch x86_64
   hdiutil detach "$MOUNT_POINT" >/dev/null
   (
     cd build
