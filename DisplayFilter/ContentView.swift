@@ -50,6 +50,14 @@ struct ContentView: View {
         VStack(spacing: 8) {
             FilterCard { statusView }
 
+            if !appState.brightnessControlSummary.isEmpty {
+                Text(appState.brightnessControlSummary)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
+            }
+
             FilterCard {
                 ModernFilterSlider(value: brightness, label: "Brightness", icon: "sun.max.fill", range: ColorAdjuster.minimumBrightness...1)
             }
