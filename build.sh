@@ -24,10 +24,15 @@ if [[ "$MODE" == "package" ]]; then
   MODE=release
   PACKAGE=1
 fi
+VERSION="${VERSION:-1.1.1}"
+BUNDLE_VERSION="${VERSION#v}"
+if [[ ! "$BUNDLE_VERSION" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+  BUNDLE_VERSION=1.1.1
+fi
 BUNDLE_ID="${BUNDLE_ID:-com.cipshadow.autodim}"
 APP=build/AutoDim.app
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 FLAGS=(-parse-as-library)
 if [[ "$MODE" == "debug" ]]; then FLAGS+=(-DDEBUG -Onone); else FLAGS+=(-O); fi
@@ -49,8 +54,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
 	<key>CFBundleName</key><string>AutoDim</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleShortVersionString</key><string>1.0.0</string>
-	<key>CFBundleVersion</key><string>1</string>
+	<key>CFBundleShortVersionString</key><string>$BUNDLE_VERSION</string>
+	<key>CFBundleVersion</key><string>$BUNDLE_VERSION</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>LSMinimumSystemVersion</key><string>$MINIMUM_MACOS</string>
 	<key>LSUIElement</key><true/>
 	<key>NSPrincipalClass</key><string>NSApplication</string>
@@ -58,11 +64,21 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+ICON_ROOT="build/AppIcon.iconset"
+rm -rf "$ICON_ROOT"
+mkdir -p "$ICON_ROOT"
+sips -z 1024 1024 "$SRC/Assets.xcassets/AppIcon.appiconset/AutoDim-1024.png" --out build/AppIcon-1024.png >/dev/null
+for size in 16 32 128 256 512; do
+  sips -z "$size" "$size" build/AppIcon-1024.png --out "$ICON_ROOT/icon_${size}x${size}.png" >/dev/null
+  double=$((size * 2))
+  sips -z "$double" "$double" build/AppIcon-1024.png --out "$ICON_ROOT/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$ICON_ROOT" -o "$APP/Contents/Resources/AppIcon.icns"
+
 codesign --force --sign - --options runtime --entitlements $SRC/DisplayFilter.entitlements "$APP"
 codesign --verify --deep --strict "$APP"
 
 if [[ "$PACKAGE" == 1 ]]; then
-  VERSION="${VERSION:-1.0.0}"
   # GitHub pull-request refs contain a slash (for example, "8/merge").
   # Release artifact filenames must remain flat.
   VERSION="${VERSION//\//-}"
