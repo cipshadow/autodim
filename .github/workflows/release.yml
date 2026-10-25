@@ -1,0 +1,45 @@
+name: Release AutoDim
+
+on:
+  pull_request:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Run schedule and hardware-brightness checks
+        run: ./build.sh check
+      - name: Build a universal DMG
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: ./build.sh package
+      - name: Upload release candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: AutoDim-${{ github.event.pull_request.number || github.ref_name }}-universal2
+          path: |
+            build/*.dmg
+            build/*.dmg.sha256
+          if-no-files-found: error
+      - name: Publish unsigned release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.3.3
+        with:
+          files: |
+            build/*.dmg
+            build/*.dmg.sha256
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            Download the DMG, open it, and drag **AutoDim** to Applications.
+
+            This unsigned release is not notarized. At first launch, Control-click
+            AutoDim in Applications, choose **Open**, then choose **Open** again.

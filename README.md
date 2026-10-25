@@ -11,19 +11,20 @@ AutoDim is a fork of [DisplayFilter](https://github.com/uyasarkocal/DisplayFilte
 - Built-in daily schedule: full brightness and no filter from 07:00, then three progressively dimmer and warmer evening phases (defaults 20:00, 22:00, 23:00), each fading in over 10 minutes; all times, brightness and color temperatures are editable
 - Pause: "Until next phase", "For 1 hour" or "Until tomorrow" returns the screen to normal, then the schedule resumes
 - Manual changes hold until the next scheduled boundary, then the schedule resumes
-- Software brightness control below the display's native level, and warm manual color filters (orange, red) with adjustable intensity
-- Applies to all connected displays
+- Hardware brightness control for the built-in display, plus DDC/CI brightness control for external displays that expose it; unsupported displays use software dimming
+- Restores each controlled display's prior brightness when paused, disabled or quit, and preserves a recovery value after an unexpected quit
+- Warm manual color filters (orange, red) with adjustable intensity, applied to all connected displays
 - Lives in the menu bar, with a Now tab and a Schedule tab
 
 ![AutoDim, Now tab](docs/popover-now.png) ![AutoDim, Schedule tab](docs/popover-schedule.png)
 
-Brightness is a software gamma adjustment. It does not change the display's hardware backlight.
+AutoDim uses the Mac's hardware brightness control for the built-in display. It tries DDC/CI for external displays, which can work over USB-C, DisplayPort or HDMI when the monitor, cable and dock pass DDC commands. The menu identifies displays that need software dimming instead. Colour temperature remains a software gamma adjustment.
 
 ## Install
 
-Requires macOS 15.0 or later on Apple Silicon (the build targets arm64; Intel Macs are not supported).
+Requires macOS 13.0 or later on an Intel or Apple Silicon Mac.
 
-**Download:** get the current `AutoDim` ZIP from [Releases](https://github.com/cipshadow/autodim/releases), unzip it and move `AutoDim.app` to `/Applications`. The app is ad-hoc signed and not notarized, so macOS blocks the first launch. Open **System Settings > Privacy & Security**, choose **Open Anyway** for AutoDim, then confirm **Open**. Do not disable Gatekeeper or remove the app's quarantine attribute.
+**Download:** get the current `AutoDim` DMG from [Releases](https://github.com/cipshadow/autodim/releases), open it and drag `AutoDim.app` to Applications. The app is ad-hoc signed and not notarized, so at first launch Control-click `AutoDim.app`, choose **Open**, then confirm **Open**. If macOS does not offer that option, attempt to open it once, then use **System Settings > Privacy & Security > Open Anyway**. Do not disable Gatekeeper or remove the app's quarantine attribute.
 
 **Or build from source:**
 
@@ -47,7 +48,7 @@ What the research supports, and what it does not:
 
 - `./build.sh debug` adds the `--simulate-time HH:MM` and `--debug-window` launch arguments for testing the schedule.
 - `./build.sh check` runs the schedule math checks.
-- `VERSION=1.0.1 ./build.sh package` creates `build/AutoDim-1.0.1.zip` and its SHA-256 file, then verifies the extracted app signature. Use this command for release uploads rather than Finder's Compress action.
+- `VERSION=1.1.0 ./build.sh package` creates `build/AutoDim-1.1.0.dmg` and its SHA-256 file, then verifies the mounted app's signature and both CPU architectures. Use this command for release uploads rather than Finder's Compress action.
 - The Xcode project (`DisplayFilter.xcodeproj`) also builds the app but has not been built on the maintainer's machine.
 
 ## License
