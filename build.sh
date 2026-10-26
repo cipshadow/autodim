@@ -93,6 +93,8 @@ if [[ "$PACKAGE" == 1 ]]; then
   hdiutil verify "$ARCHIVE" >/dev/null
   MOUNT_POINT="$(hdiutil attach -readonly -nobrowse -mountpoint "$VERIFY_ROOT" "$ARCHIVE" | tail -1 | awk '{print $NF}')"
   codesign --verify --deep --strict "$MOUNT_POINT/AutoDim.app"
+  test -s "$MOUNT_POINT/AutoDim.app/Contents/Resources/AppIcon.icns"
+  test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$MOUNT_POINT/AutoDim.app/Contents/Info.plist")" = "$BUNDLE_VERSION"
   lipo "$MOUNT_POINT/AutoDim.app/Contents/MacOS/AutoDim" -verify_arch arm64
   lipo "$MOUNT_POINT/AutoDim.app/Contents/MacOS/AutoDim" -verify_arch x86_64
   hdiutil detach "$MOUNT_POINT" >/dev/null
