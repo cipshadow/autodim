@@ -33,6 +33,8 @@ Requires macOS 13.0 or later on an Intel or Apple Silicon Mac.
 3. Copy `build/AutoDim.app` to `/Applications` and open it.
 4. To start it at login, add it in System Settings, General, Login Items. The schedule only runs while the app is open.
 
+If Spotlight opens AutoDim but no window appears, that is normal for this menu-only app. Look for the half-moon at the right of the menu bar. If it is missing while AutoDim is running, open **System Settings > Menu Bar > Allow in the Menu Bar**, and turn AutoDim off and on again. Check both menu bars if you use more than one screen. If the installed app still reports an older version, replace it with the current DMG's app in `/Applications` and reopen it.
+
 Other gamma-based tools such as f.lux change the same display settings; run only one at a time.
 
 ## Why these defaults
