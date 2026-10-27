@@ -73,7 +73,8 @@ final class AppState: ObservableObject {
         registerObservers()
         refresh(force: true)
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            self?.refresh()
+            // macOS can reset a display's gamma without changing our target or posting a screen notification.
+            self?.refresh(force: true)
         }
         timer?.tolerance = 5
     }
