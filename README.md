@@ -2,6 +2,37 @@
 
 AutoDim is a macOS menu bar app that dims your screen and removes blue light on a daily schedule, so your display winds down before bedtime.
 
+It requires macOS 13 (Ventura) or later, on an Intel or Apple Silicon Mac.
+
+## Installing
+
+1. Download the latest release from the [GitHub Releases page](https://github.com/cipshadow/autodim/releases).
+2. Open the disk image and drag **AutoDim** into your Applications folder.
+3. Open AutoDim. The first time you launch it, macOS says it can't verify the developer.
+
+On macOS 15 Sequoia and later, go to **System Settings**, then **Privacy & Security**, scroll down, and click **Open Anyway**, then confirm.
+
+On older macOS, right-click the app and choose **Open**, then confirm.
+
+Or clear the warning from Terminal, then open AutoDim:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/AutoDim.app
+```
+
+AutoDim is a free open-source app built by an indie developer, without a paid Apple developer certificate, and the source is right here.
+
+### Build from source
+
+1. Clone this repository.
+2. Run `./build.sh` (needs only the Xcode Command Line Tools, not full Xcode). It builds and ad-hoc signs `build/AutoDim.app`.
+3. Copy `build/AutoDim.app` to `/Applications` and open it.
+4. To start it at login, add it in System Settings, General, Login Items. The schedule only runs while the app is open.
+
+If Spotlight opens AutoDim but no window appears, that is normal for this menu-only app. Look for the half-moon at the right of the menu bar. If it is missing while AutoDim is running, open **System Settings > Menu Bar > Allow in the Menu Bar**, and turn AutoDim off and on again. Check both menu bars if you use more than one screen. If the installed app still reports an older version, replace it with the app from the current release in Applications and reopen it.
+
+Other gamma-based tools such as f.lux change the same display settings; run only one at a time.
+
 ## Credit
 
 AutoDim is a fork of [DisplayFilter](https://github.com/uyasarkocal/DisplayFilter) by Yaşar Koçal (MIT licensed). The menu bar app, gamma-table dimming and color filters are his work; the daily schedule, color-temperature phases, persistence, launch at login and multi-display fixes were added on top. The original copyright notice is kept in `LICENSE`. DisplayFilter was inspired by [MonitorControl](https://github.com/MonitorControl/MonitorControl) and [f.lux](https://justgetflux.com/).
@@ -19,23 +50,6 @@ AutoDim is a fork of [DisplayFilter](https://github.com/uyasarkocal/DisplayFilte
 ![AutoDim, Now tab](docs/popover-now.png) ![AutoDim, Schedule tab](docs/popover-schedule.png)
 
 AutoDim uses the Mac's hardware brightness control for the built-in display. It tries DDC/CI for external displays, which can work over USB-C, DisplayPort or HDMI when the monitor, cable and dock pass DDC commands. The menu identifies displays that need software dimming instead. Colour temperature remains a software gamma adjustment.
-
-## Install
-
-Requires macOS 13.0 or later on an Intel or Apple Silicon Mac.
-
-**Download:** get the current `AutoDim` DMG from [Releases](https://github.com/cipshadow/autodim/releases), open it and drag `AutoDim.app` to Applications. The app is ad-hoc signed and not notarized, so at first launch Control-click `AutoDim.app`, choose **Open**, then confirm **Open**. If macOS does not offer that option, attempt to open it once, then use **System Settings > Privacy & Security > Open Anyway**. Do not disable Gatekeeper or remove the app's quarantine attribute.
-
-**Or build from source:**
-
-1. Clone this repository.
-2. Run `./build.sh` (needs only the Xcode Command Line Tools, not full Xcode). It builds and ad-hoc signs `build/AutoDim.app`.
-3. Copy `build/AutoDim.app` to `/Applications` and open it.
-4. To start it at login, add it in System Settings, General, Login Items. The schedule only runs while the app is open.
-
-If Spotlight opens AutoDim but no window appears, that is normal for this menu-only app. Look for the half-moon at the right of the menu bar. If it is missing while AutoDim is running, open **System Settings > Menu Bar > Allow in the Menu Bar**, and turn AutoDim off and on again. Check both menu bars if you use more than one screen. If the installed app still reports an older version, replace it with the current DMG's app in `/Applications` and reopen it.
-
-Other gamma-based tools such as f.lux change the same display settings; run only one at a time.
 
 ## Why these defaults
 
